@@ -26,7 +26,7 @@ namespace BaileysCSharp.Core
     {
         protected ConcurrentDictionary<string, TaskCompletionSource<BinaryNode>> waits = new ConcurrentDictionary<string, TaskCompletionSource<BinaryNode>>();
 
-        private string[] Browser = ["Ubuntu", "Chrome", "20.0.04",];
+        private string[] Browser;
         protected AbstractSocketClient WS;
         private NoiseHandler noise;
         private CancellationTokenSource qrTimerToken;
@@ -106,6 +106,7 @@ namespace BaileysCSharp.Core
                 throw new ArgumentNullException(nameof(config));
 
             SocketConfig = config;
+            Browser = config.Browser;
             EV = new EventEmitter(config.Logger);
             Creds = config.Auth.Creds;
             Keys = config.Auth.Keys;

@@ -28,19 +28,13 @@ namespace BaileysCSharp.Core.Utils
         public static ClientPayload GenerateRegistrationNode(AuthenticationCreds creds, SocketConfig config)
         {
             var appVersion = Helper.CryptoUtils.Md5(string.Join(".", config.Version));
-            var companion = new DeviceProps()
-            {
-                Os = config.Browser[0],
-                PlatformType = DeviceProps.Types.PlatformType.Chrome,
-                RequireFullSync = config.SyncFullHistory
-            };
-
             var payload = GetClientPayload(config);
             payload.Passive = false;
+            payload.Pull = false;
             payload.DevicePairingData = new DevicePairingRegistrationData()
             {
                 BuildHash = appVersion.ToByteString(),
-                DeviceProps = companion.ToByteString(),
+                DeviceProps = CreateCompanionProps(config).ToByteString(),
                 ERegid = creds.RegistrationId.EncodeBigEndian().ToByteString(),
                 EKeytype = Constants.KEY_BUNDLE_TYPE.ToByteString(),
                 EIdent = creds.SignedIdentityKey.Public.ToByteString(),
@@ -121,8 +115,12 @@ namespace BaileysCSharp.Core.Utils
             var decoded = JidUtils.JidDecode(user);
             var payload = GetClientPayload(config);
             payload.Passive = true;
+            payload.Pull = true;
             payload.Username = Convert.ToUInt64(decoded.User);
-            payload.Device = decoded.Device.Value;
+            if (decoded.Device.HasValue)
+            {
+                payload.Device = decoded.Device.Value;
+            }
             return payload;
         }
 
@@ -157,11 +155,49 @@ namespace BaileysCSharp.Core.Utils
                 Mnc = "000",
                 OsVersion = "0.1",
                 Manufacturer = "",
-                Device = "Dekstop",
+                Device = "Desktop",
                 OsBuildNumber = "0.1",
                 LocaleLanguageIso6391 = "en",
                 LocaleCountryIso31661Alpha2 = "US",
             };
+        }
+
+        private static DeviceProps CreateCompanionProps(SocketConfig config)
+        {
+            return new DeviceProps()
+            {
+                Os = config.Browser[0],
+                PlatformType = ResolvePlatformType(config),
+                RequireFullSync = config.SyncFullHistory,
+                Version = new DeviceProps.Types.AppVersion()
+                {
+                    Primary = 10,
+                    Secondary = 15,
+                    Tertiary = 7,
+                },
+                HistorySyncConfig = new DeviceProps.Types.HistorySyncConfig()
+                {
+                    StorageQuotaMb = 10240,
+                    InlineInitialPayloadInE2EeMsg = true,
+                    SupportCallLogHistory = false,
+                    SupportBotUserAgentChatHistory = true,
+                    SupportCagReactionsAndPolls = true,
+                }
+            };
+        }
+
+        private static DeviceProps.Types.PlatformType ResolvePlatformType(SocketConfig config)
+        {
+            var browser = config.Browser.Length > 1
+                ? config.Browser[1]?.Trim() ?? string.Empty
+                : string.Empty;
+
+            if (Enum.TryParse<DeviceProps.Types.PlatformType>(browser, ignoreCase: true, out var platformType))
+            {
+                return platformType;
+            }
+
+            return DeviceProps.Types.PlatformType.Chrome;
         }
 
         public static BinaryNode ConfigureSuccessfulPairing(AuthenticationCreds creds, BinaryNode node)

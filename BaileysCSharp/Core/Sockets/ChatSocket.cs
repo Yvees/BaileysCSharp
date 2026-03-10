@@ -152,7 +152,23 @@ namespace BaileysCSharp.Core
 
             var t2 = new Task(async () =>
             {
-                await ProcessMessageUtil.ProcessMessage(msg, shouldProcessHistoryMsg, Creds, Keys, Store, EV);
+                try
+                {
+                    await ProcessMessageUtil.ProcessMessage(msg, shouldProcessHistoryMsg, Creds, Keys, Store, EV);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(
+                        new
+                        {
+                            msg.Key?.Id,
+                            msg.Key?.RemoteJid,
+                            type,
+                            shouldProcessHistoryMsg,
+                            error = ex.Message,
+                        },
+                        "error processing message");
+                }
             });
             t1.Start();
             t2.Start();
@@ -341,7 +357,7 @@ namespace BaileysCSharp.Core
 
         private bool ShouldSyncHistoryMessage(Message.Types.HistorySyncNotification historyMsg)
         {
-            return true;
+            return SocketConfig.ShouldSyncHistoryMessage(historyMsg);
         }
 
         public async Task CleanDirtyBits(string type, ulong? fromTimestamp = null)

@@ -8,9 +8,9 @@ namespace BaileysCSharp.Core.Utils
 {
     public class Browsers
     {
-        public static string[] Ubuntu(string browser) => ["Ubuntu", browser, "20.0.04"];
-        public static string[] MacOS(string browser) => ["Mac OS", browser, "10.15.7"];
-        public static string[] Baileys(string browser) => ["Baileys", browser, "4.0.0"];
-        public static string[] Windows(string browser) => ["Windows", browser, "10.0.22621"];
+        public static string[] Ubuntu(string browser) => ["Ubuntu", browser, "22.04.4"];
+        public static string[] MacOS(string browser) => ["Mac OS", browser, "14.4.1"];
+        public static string[] Baileys(string browser) => ["Baileys", browser, "6.5.0"];
+        public static string[] Windows(string browser) => ["Windows", browser, "10.0.22631"];
     }
 }

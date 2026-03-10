@@ -22,8 +22,8 @@ namespace BaileysCSharp.Core.Models
         public string[] Browser { get; set; }
         public SocketConfig()
         {
-            Browser = Browsers.Ubuntu("Chrome");
-            Version = [2, 3000, 1015901307];
+            Browser = Browsers.MacOS("Chrome");
+            Version = [2, 3000, 1033846690];
             Logger = new DefaultLogger();
             Logger.Level = LogLevel.Trace;
             AppStateMacVerification = new AppStateMacVerification();
@@ -44,12 +44,13 @@ namespace BaileysCSharp.Core.Models
         public bool Mobile => false;//For Now only multi device api
         public AuthenticationState Auth { get; set; }
         public bool SyncFullHistory { get; set; }
+        public bool ProcessHistoryMessages { get; set; } = true;
 
         public AppStateMacVerification AppStateMacVerification { get; set; }
 
-        public bool ShouldSyncHistoryMessage()
+        public bool ShouldSyncHistoryMessage(Message.Types.HistorySyncNotification? historyMsg = null)
         {
-            return true;
+            return ProcessHistoryMessages;
         }
 
         public bool ShouldIgnoreJid(string jid = "")
