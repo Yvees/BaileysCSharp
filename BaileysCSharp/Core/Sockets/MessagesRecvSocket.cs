@@ -767,6 +767,34 @@ namespace BaileysCSharp.Core.Sockets
             SendNode(stanza);
         }
 
+        public void ReadMessages(params MessageKey[] keys)
+        {
+            if (keys == null || keys.Length == 0)
+            {
+                return;
+            }
+
+            var receipts = keys
+                .Where(key => key != null
+                    && !string.IsNullOrWhiteSpace(key.RemoteJid)
+                    && !string.IsNullOrWhiteSpace(key.Id))
+                .GroupBy(key => new
+                {
+                    key.RemoteJid,
+                    Participant = JidUtils.IsJidGroup(key.RemoteJid) ? key.Participant : null,
+                    Type = key.FromMe ? MessageReceiptType.ReadSelf : MessageReceiptType.Read,
+                });
+
+            foreach (var receipt in receipts)
+            {
+                SendReceipt(
+                    receipt.Key.RemoteJid,
+                    receipt.Key.Participant,
+                    receipt.Key.Type,
+                    receipt.Select(key => key.Id).Distinct(StringComparer.Ordinal).ToArray());
+            }
+        }
+
         private void SendReceipt(string jid, string? participant, string type, params string[] messageIds)
         {
 
