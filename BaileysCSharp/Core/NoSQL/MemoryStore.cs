@@ -269,7 +269,22 @@ namespace BaileysCSharp.Core.NoSQL
 
         private void Contacts_Update(object? sender, ContactModel[] e)
         {
-            //TODO
+            lock (locker)
+            {
+                changes = true;
+                foreach (var item in e)
+                {
+                    var existing = GetContact(item.ID);
+                    if (existing == null)
+                    {
+                        contacts.Add(item);
+                        continue;
+                    }
+
+                    existing.MergeFrom(item);
+                    contacts.Update(existing);
+                }
+            }
         }
 
         private void Connection_Update(object? sender, ConnectionState e)
@@ -405,18 +420,25 @@ namespace BaileysCSharp.Core.NoSQL
 
         private ContactModel[] ContactsUpsert(List<ContactModel> newContacts)
         {
-            var oldContacts = newContacts.ToList();
+            changes = true;
             List<ContactModel> toAdd = new List<ContactModel>();
             foreach (var item in newContacts)
             {
+                var existing = GetContact(item.ID);
+                if (existing != null)
+                {
+                    existing.MergeFrom(item);
+                    contacts.Update(existing);
+                    continue;
+                }
+
                 if (!toAdd.Any(x => x.ID == item.ID))
                 {
                     toAdd.Add(item);
                 }
-                oldContacts.Remove(item);
             }
             contacts.InsertBulk(toAdd);
-            return oldContacts.ToArray();
+            return [];
         }
 
         private void MessageDelete_Emit(MessageUpdate[] args)
@@ -478,6 +500,17 @@ namespace BaileysCSharp.Core.NoSQL
         public ContactModel? GetContact(string jid)
         {
             return contacts.FirstOrDefault(x => x.ID == jid);
+        }
+
+        public ContactModel? GetContactByLid(string jid)
+        {
+            var normalized = JidNormalizedUser(jid);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return null;
+            }
+
+            return contacts.FirstOrDefault(x => x.LID == normalized);
         }
 
         internal ChatModel? GetChat(string? jid)

@@ -41,11 +41,27 @@ namespace BaileysCSharp.Core.Utils
 
                     foreach (var conv in item.Conversations)
                     {
-                        contacts.Add(new ContactModel()
+                        var contactId = NormalizeJid(conv.PnJid);
+                        if (string.IsNullOrWhiteSpace(contactId))
                         {
-                            ID = conv.Id,
-                            Name = conv.Name,
-                        });
+                            contactId = NormalizeJid(conv.Id);
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(contactId))
+                        {
+                            var lidJid = NormalizeJid(conv.LidJid);
+                            if (string.IsNullOrWhiteSpace(lidJid) && JidUtils.IsLidUser(contactId))
+                            {
+                                lidJid = contactId;
+                            }
+
+                            contacts.Add(new ContactModel()
+                            {
+                                ID = contactId,
+                                LID = lidJid,
+                                Name = conv.Name,
+                            });
+                        }
 
                         var chat = chats.FirstOrDefault(x => x.ID == conv.Id) ?? new ChatModel() { ID = conv.Id, Archived = conv.Archived, ConversationTimestamp = conv.ConversationTimestamp, UnreadCount = conv.UnreadCount, ReadOnly = conv.ReadOnly };
 
@@ -102,6 +118,13 @@ namespace BaileysCSharp.Core.Utils
             var buffer = BufferReader.Inflate(stream);
             var syncData = HistorySync.Parser.ParseFrom(buffer);
             return syncData;
+        }
+
+        private static string NormalizeJid(string jid)
+        {
+            return string.IsNullOrWhiteSpace(jid)
+                ? string.Empty
+                : JidUtils.JidNormalizedUser(jid);
         }
 
     }

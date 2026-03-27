@@ -437,8 +437,28 @@ namespace BaileysCSharp.Core.Utils
             }
             else if (action?.ContactAction != null)
             {
-                var contact = new ContactModel() { ID = id, Name = action.ContactAction.FullName };
-                eV.Emit(EmitType.Upsert, contact);
+                var contactId = NormalizeJid(id);
+                if (!string.IsNullOrWhiteSpace(contactId))
+                {
+                    var contact = new ContactModel()
+                    {
+                        ID = contactId,
+                        LID = ResolveLidJid(action.ContactAction.LidJid, id, syncAction.Index),
+                        Name = action.ContactAction.FullName
+                    };
+                    eV.Emit(EmitType.Upsert, contact);
+                }
+            }
+            else if (action?.PnForLidChatAction != null)
+            {
+                var phoneJid = NormalizeJid(action.PnForLidChatAction.PnJid);
+                var lidJid = ResolveLidJid(null, id, syncAction.Index);
+                if (!string.IsNullOrWhiteSpace(phoneJid) && !string.IsNullOrWhiteSpace(lidJid))
+                {
+                    var contact = store.GetContact(phoneJid) ?? new ContactModel() { ID = phoneJid };
+                    contact.LID = lidJid;
+                    eV.Emit(contact.Name == null ? EmitType.Upsert : EmitType.Update, [contact]);
+                }
             }
             else if (action?.PushNameSetting != null)
             {
@@ -492,6 +512,39 @@ namespace BaileysCSharp.Core.Utils
             {
 
             }
+        }
+
+        private static string NormalizeJid(string jid)
+        {
+            return string.IsNullOrWhiteSpace(jid)
+                ? string.Empty
+                : JidUtils.JidNormalizedUser(jid);
+        }
+
+        private static string ResolveLidJid(string explicitLidJid, string id, string[] index)
+        {
+            var lidJid = NormalizeJid(explicitLidJid);
+            if (!string.IsNullOrWhiteSpace(lidJid))
+            {
+                return lidJid;
+            }
+
+            var normalizedId = NormalizeJid(id);
+            if (JidUtils.IsLidUser(normalizedId))
+            {
+                return normalizedId;
+            }
+
+            foreach (var item in index)
+            {
+                var candidate = NormalizeJid(item);
+                if (JidUtils.IsLidUser(candidate))
+                {
+                    return candidate;
+                }
+            }
+
+            return string.Empty;
         }
     }
 }

@@ -30,6 +30,41 @@ namespace BaileysCSharp.Core.Models
             return ID;
         }
 
+        public void MergeFrom(ContactModel source)
+        {
+            if (!string.IsNullOrWhiteSpace(source?.LID))
+            {
+                LID = source.LID;
+            }
+
+            if (!string.IsNullOrWhiteSpace(source?.Name))
+            {
+                Name = source.Name;
+            }
+
+            if (!string.IsNullOrWhiteSpace(source?.Notify))
+            {
+                Notify = source.Notify;
+            }
+
+            if (!string.IsNullOrWhiteSpace(source?.VerifiedName))
+            {
+                VerifiedName = source.VerifiedName;
+            }
+
+            if (!string.IsNullOrWhiteSpace(source?.ImgUrl))
+            {
+                ImgUrl = source.ImgUrl;
+            }
+
+            if (!string.IsNullOrWhiteSpace(source?.Status))
+            {
+                Status = source.Status;
+            }
+
+            Saved = Saved || source?.Saved == true;
+        }
+
         public override string ToString()
         {
             return $"{ID} - {Name}";
