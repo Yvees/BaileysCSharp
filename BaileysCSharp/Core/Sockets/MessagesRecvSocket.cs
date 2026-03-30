@@ -953,7 +953,7 @@ namespace BaileysCSharp.Core.Sockets
                     FileSha256 = attachement.FileSha256,
                     FileSizeBytes = attachement.FileLength,
                     MediaKey = attachement.MediaKey
-                }, "image", new MediaDownloadOptions());
+                }, attachement.Url, "image", new MediaDownloadOptions());
                 return new MediaDownload()
                 {
                     Data = result,
@@ -972,7 +972,7 @@ namespace BaileysCSharp.Core.Sockets
                     FileSha256 = attachement.FileSha256,
                     FileSizeBytes = attachement.FileLength,
                     MediaKey = attachement.MediaKey
-                }, "document", new MediaDownloadOptions());
+                }, attachement.Url, "document", new MediaDownloadOptions());
                 return new MediaDownload()
                 {
                     Data = result,
@@ -991,7 +991,7 @@ namespace BaileysCSharp.Core.Sockets
                     FileSha256 = attachement.FileSha256,
                     FileSizeBytes = attachement.FileLength,
                     MediaKey = attachement.MediaKey
-                }, "audio", new MediaDownloadOptions());
+                }, attachement.Url, "audio", new MediaDownloadOptions());
                 return new MediaDownload()
                 {
                     Data = result,
@@ -1008,7 +1008,7 @@ namespace BaileysCSharp.Core.Sockets
                     FileSha256 = attachement.FileSha256,
                     FileSizeBytes = attachement.FileLength,
                     MediaKey = attachement.MediaKey
-                }, "video", new MediaDownloadOptions());
+                }, attachement.Url, "video", new MediaDownloadOptions());
                 return new MediaDownload()
                 {
                     Data = result,
@@ -1026,7 +1026,7 @@ namespace BaileysCSharp.Core.Sockets
                     FileSha256 = attachement.FileSha256,
                     FileSizeBytes = attachement.FileLength,
                     MediaKey = attachement.MediaKey
-                }, "sticker", new MediaDownloadOptions());
+                }, attachement.Url, "sticker", new MediaDownloadOptions());
                 return new MediaDownload()
                 {
                     Data = result,
@@ -1043,7 +1043,7 @@ namespace BaileysCSharp.Core.Sockets
                     FileSha256 = attachement.FileSha256,
                     FileSizeBytes = attachement.FileLength,
                     MediaKey = attachement.MediaKey
-                }, "ptv", new MediaDownloadOptions());
+                }, attachement.Url, "ptv", new MediaDownloadOptions());
                 return new MediaDownload()
                 {
                     Data = result,
@@ -1060,7 +1060,7 @@ namespace BaileysCSharp.Core.Sockets
                     FileSha256 = attachement.FileSha256,
                     FileSizeBytes = attachement.FileLength,
                     MediaKey = attachement.MediaKey
-                }, "ptv", new MediaDownloadOptions());
+                }, attachement.Url, "ptv", new MediaDownloadOptions());
                 return new MediaDownload()
                 {
                     Data = result,
@@ -1077,7 +1077,7 @@ namespace BaileysCSharp.Core.Sockets
                     FileSha256 = attachement.Catalog.CatalogImage.FileSha256,
                     FileSizeBytes = attachement.Catalog.CatalogImage.FileLength,
                     MediaKey = attachement.Catalog.CatalogImage.MediaKey
-                }, "image", new MediaDownloadOptions());
+                }, attachement.Catalog.CatalogImage.Url, "image", new MediaDownloadOptions());
                 return new MediaDownload()
                 {
                     Data = result,

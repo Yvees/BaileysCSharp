@@ -2,8 +2,10 @@
 using Proto;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using BaileysCSharp.Core.Helper;
@@ -24,19 +26,36 @@ namespace BaileysCSharp.Core.Utils
         const int AES_CHUNK_SIZE = 16;
         public static async Task<byte[]> DownloadContentFromMessage(ExternalBlobReference blob, string type, MediaDownloadOptions options)
         {
-            var downloadUrl = $"https://{DEF_HOST}{blob.DirectPath}";
+            return await DownloadContentFromMessage(blob, null, type, options);
+        }
+
+        public static async Task<byte[]> DownloadContentFromMessage(ExternalBlobReference blob, string? url, string type, MediaDownloadOptions options)
+        {
+            var downloadUrl = ResolveDownloadUrl(url, blob.DirectPath);
             var keys = GetMediaKeys(blob.MediaKey.ToByteArray(), type);
-            return await DownloadEncryptedContent(downloadUrl, keys, options);
+            return await DownloadEncryptedContent(
+                downloadUrl,
+                keys,
+                blob.FileEncSha256?.ToByteArray(),
+                blob.FileSha256?.ToByteArray(),
+                (long?)blob.FileSizeBytes,
+                options);
         }
         public static async Task<byte[]> DownloadContentFromMessage(Message.Types.HistorySyncNotification blob, string type, MediaDownloadOptions options)
         {
-            var downloadUrl = $"https://{DEF_HOST}{blob.DirectPath}";
+            var downloadUrl = ResolveDownloadUrl(null, blob.DirectPath);
             var keys = GetMediaKeys(blob.MediaKey.ToByteArray(), type);
-            return await DownloadEncryptedContent(downloadUrl, keys, options);
+            return await DownloadEncryptedContent(downloadUrl, keys, null, null, null, options);
         }
 
 
-        private static async Task<byte[]> DownloadEncryptedContent(string downloadUrl, MediaDecryptionKeyInfo keys, MediaDownloadOptions options)
+        private static async Task<byte[]> DownloadEncryptedContent(
+            string downloadUrl,
+            MediaDecryptionKeyInfo keys,
+            byte[]? expectedEncryptedSha256,
+            byte[]? expectedPlainSha256,
+            long? expectedPlainLength,
+            MediaDownloadOptions options)
         {
             var bytesFetched = 0;
             var startChunk = 0;
@@ -76,6 +95,8 @@ namespace BaileysCSharp.Core.Utils
                 }
 
                 var data = await httpClient.GetByteArrayAsync(downloadUrl);
+                ValidateEncryptedHash(data, expectedEncryptedSha256, options);
+
                 var decryptLength = ToSmallestChunkSize(data.Length);
                 data = data.Slice(0, decryptLength);
 
@@ -88,7 +109,64 @@ namespace BaileysCSharp.Core.Utils
                 }
 
                 var decrypted = Helper.CryptoUtils.DecryptAesCbcWithIV(data, keys.CipherKey, iv);
+                ValidatePlainContent(decrypted, expectedPlainSha256, expectedPlainLength, options);
                 return decrypted;
+            }
+        }
+
+        private static string ResolveDownloadUrl(string? url, string? directPath)
+        {
+            if (!string.IsNullOrWhiteSpace(url) &&
+                Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+                uri.Scheme == Uri.UriSchemeHttps &&
+                string.Equals(uri.Host, DEF_HOST, StringComparison.OrdinalIgnoreCase))
+            {
+                return url;
+            }
+
+            if (string.IsNullOrWhiteSpace(directPath))
+            {
+                throw new Boom("No valid media URL or directPath present in message", new BoomData(400));
+            }
+
+            return $"https://{DEF_HOST}{directPath}";
+        }
+
+        private static void ValidateEncryptedHash(byte[] encryptedBytes, byte[]? expectedEncryptedSha256, MediaDownloadOptions options)
+        {
+            if (options.StartByte > 0 || options.EndByte > 0 || expectedEncryptedSha256 == null || expectedEncryptedSha256.Length == 0)
+            {
+                return;
+            }
+
+            var actualHash = SHA256.HashData(encryptedBytes);
+            if (!actualHash.SequenceEqual(expectedEncryptedSha256))
+            {
+                throw new Boom("Downloaded media encrypted hash mismatch");
+            }
+        }
+
+        private static void ValidatePlainContent(byte[] decryptedBytes, byte[]? expectedPlainSha256, long? expectedPlainLength, MediaDownloadOptions options)
+        {
+            if (options.StartByte > 0 || options.EndByte > 0)
+            {
+                return;
+            }
+
+            if (expectedPlainLength.HasValue && expectedPlainLength.Value > 0 && decryptedBytes.LongLength != expectedPlainLength.Value)
+            {
+                throw new Boom($"Downloaded media length mismatch. expected={expectedPlainLength.Value}; actual={decryptedBytes.LongLength}");
+            }
+
+            if (expectedPlainSha256 == null || expectedPlainSha256.Length == 0)
+            {
+                return;
+            }
+
+            var actualHash = SHA256.HashData(decryptedBytes);
+            if (!actualHash.SequenceEqual(expectedPlainSha256))
+            {
+                throw new Boom("Downloaded media plaintext hash mismatch");
             }
         }
 
