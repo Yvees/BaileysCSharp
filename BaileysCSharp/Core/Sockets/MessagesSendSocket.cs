@@ -445,6 +445,7 @@ namespace BaileysCSharp.Core.Sockets
                 var me = JidDecode(meId);
                 var meUser = me.User;
                 var meDevice = me.Device;
+                var selfLidUser = JidUtils.JidUser(Creds.Me.LID);
 
                 if (options.Participant == null)
                 {
@@ -471,7 +472,8 @@ namespace BaileysCSharp.Core.Sockets
                     var iuser = item.User;
                     var idevice = item.Device;
                     var isMe = iuser == meUser;
-                    var addJid = JidEncode((isMe && isLid) ? Creds.Me.LID.Split(":")[0] ?? iuser : iuser, isLid ? "lid" : "s.whatsapp.net", idevice);
+                    var addJidUser = (isMe && isLid) ? selfLidUser ?? iuser : iuser;
+                    var addJid = JidEncode(addJidUser, isLid ? "lid" : "s.whatsapp.net", idevice);
                     if (isMe)
                     {
                         meJids.Add(addJid);

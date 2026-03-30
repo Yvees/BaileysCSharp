@@ -439,7 +439,8 @@ namespace BaileysCSharp.Core.Sockets
             var participant = node.getattr("participant");
             var from = node.getattr("from");
             var recipient = node.getattr("recipient");
-            var isNodeFromMe = JidUtils.AreJidsSameUser(participant ?? from, isLid ? Creds.Me.LID : Creds.Me.ID);
+            var selfJid = isLid && !string.IsNullOrWhiteSpace(Creds.Me.LID) ? Creds.Me.LID : Creds.Me.ID;
+            var isNodeFromMe = JidUtils.AreJidsSameUser(participant ?? from, selfJid);
             var remoteJid = (!isNodeFromMe || JidUtils.IsJidGroup(from) || JidUtils.IsJidNewsletter(from)) ? from : recipient;
 
             var key = new MessageKey()

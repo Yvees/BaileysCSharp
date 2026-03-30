@@ -51,6 +51,11 @@ namespace BaileysCSharp.Core.Utils
             return JidEncode(result.User, result.Server);
         }
 
+        public static string? JidUser(string? jid)
+        {
+            return JidDecode(jid)?.User;
+        }
+
         public static string JidEncode(string user, string server, uint? device = null, int? agent = null)
         {
             if (device == 0)
