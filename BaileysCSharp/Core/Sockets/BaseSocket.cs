@@ -14,6 +14,7 @@ using BaileysCSharp.LibSignal;
 using Google.Protobuf;
 using Proto;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using static BaileysCSharp.Core.Utils.GenericUtils;
@@ -25,6 +26,7 @@ namespace BaileysCSharp.Core
     public abstract class BaseSocket : IDisposable
     {
         protected ConcurrentDictionary<string, TaskCompletionSource<BinaryNode>> waits = new ConcurrentDictionary<string, TaskCompletionSource<BinaryNode>>();
+        protected ConcurrentDictionary<string, long> waitStartedAt = new ConcurrentDictionary<string, long>();
 
         private string[] Browser;
         protected AbstractSocketClient WS;
@@ -271,6 +273,17 @@ namespace BaileysCSharp.Core
             {
                 if (waits.TryRemove(id, out var value))
                 {
+                    if (waitStartedAt.TryRemove(id, out var startedAt))
+                    {
+                        Logger.Info(new
+                        {
+                            id,
+                            tag = message.tag,
+                            xmlns = message.getattr("xmlns") ?? string.Empty,
+                            type = message.getattr("type") ?? string.Empty,
+                            elapsedMs = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds
+                        }, "query completed");
+                    }
                     value.SetResult(message);
                     return true;
                 }
@@ -281,6 +294,15 @@ namespace BaileysCSharp.Core
             {
                 if (waits.TryRemove(message.tag, out var value))
                 {
+                    if (waitStartedAt.TryRemove(message.tag, out var startedAt))
+                    {
+                        Logger.Info(new
+                        {
+                            id = message.tag,
+                            tag = message.tag,
+                            elapsedMs = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds
+                        }, "query completed");
+                    }
                     value.SetResult(message);
                     return true;
                 }
@@ -441,15 +463,86 @@ namespace BaileysCSharp.Core
             WS.Send(toSend);
         }
 
+        private static Boom CreateDisconnectBoom(DisconnectReason reason, string message)
+        {
+            return new Boom(message, new BoomData((int)reason));
+        }
+
+        private void FailPendingWaits(Exception error)
+        {
+            foreach (var item in waits)
+            {
+                if (waits.TryRemove(item.Key, out var pending))
+                {
+                    if (waitStartedAt.TryRemove(item.Key, out var startedAt))
+                    {
+                        Logger.Info(new
+                        {
+                            id = item.Key,
+                            elapsedMs = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds,
+                            error = error.Message
+                        }, "query failed");
+                    }
+                    else
+                    {
+                        Logger.Info(new
+                        {
+                            id = item.Key,
+                            error = error.Message
+                        }, "query failed");
+                    }
+                    pending.TrySetException(error);
+                }
+            }
+        }
+
         public Task<BinaryNode> Query(BinaryNode iq)
         {
+            var xmlns = iq.attrs.TryGetValue("xmlns", out var queryXmlns)
+                ? queryXmlns
+                : string.Empty;
+            var type = iq.attrs.TryGetValue("type", out var queryType)
+                ? queryType
+                : string.Empty;
+            if (closed || !WS.IsConnected)
+            {
+                Logger.Info(new
+                {
+                    tag = iq.tag,
+                    xmlns,
+                    type,
+                    connected = WS.IsConnected,
+                    closed
+                }, "query rejected");
+                throw CreateDisconnectBoom(DisconnectReason.ConnectionClosed, "Connection closed");
+            }
+
             if (!iq.attrs.TryGetValue("id", out var id))
             {
                 iq.attrs["id"] = id = GenerateMessageTag();
             }
-            waits[id] = new TaskCompletionSource<BinaryNode>();
-            SendNode(iq);
-            return waits[iq.attrs["id"]].Task;
+
+            waitStartedAt[id] = Stopwatch.GetTimestamp();
+            var completion = new TaskCompletionSource<BinaryNode>(TaskCreationOptions.RunContinuationsAsynchronously);
+            waits[id] = completion;
+            Logger.Info(new
+            {
+                id,
+                tag = iq.tag,
+                xmlns,
+                type
+            }, "query sent");
+            try
+            {
+                SendNode(iq);
+                return completion.Task;
+            }
+            catch
+            {
+                waits.TryRemove(id, out _);
+                waitStartedAt.TryRemove(id, out _);
+                throw;
+            }
         }
 
         public async Task<byte[]> NextMessage(byte[] bytes)
@@ -458,9 +551,22 @@ namespace BaileysCSharp.Core
             {
                 throw new Exception("Connection Closed");
             }
-            waits["handshake"] = new TaskCompletionSource<BinaryNode>();
-            SendRawMessage(bytes);
-            var message = await waits["handshake"].Task;
+
+            waitStartedAt["handshake"] = Stopwatch.GetTimestamp();
+            var completion = new TaskCompletionSource<BinaryNode>(TaskCreationOptions.RunContinuationsAsynchronously);
+            waits["handshake"] = completion;
+            try
+            {
+                SendRawMessage(bytes);
+            }
+            catch
+            {
+                waits.TryRemove("handshake", out _);
+                waitStartedAt.TryRemove("handshake", out _);
+                throw;
+            }
+
+            var message = await completion.Task;
             return message.ToByteArray();
         }
 
@@ -470,6 +576,7 @@ namespace BaileysCSharp.Core
 
         private void Client_MessageRecieved(AbstractSocketClient sender, DataFrame frame)
         {
+            lastReceived = DateTime.Now;
             noise.DecodeFrameNew(frame.Buffer, OnFrameDeecoded);
         }
 
@@ -490,14 +597,7 @@ namespace BaileysCSharp.Core
             WS.Opened -= Client_Opened;
             WS.Disconnected -= Client_Disconnected;
             WS.MessageRecieved -= Client_MessageRecieved;
-            EV.Emit(EmitType.Update, new ConnectionState()
-            {
-                Connection = WAConnectionState.Close,
-                LastDisconnect = new LastDisconnect()
-                {
-                    Date = DateTime.Now,
-                }
-            });
+            End(CreateDisconnectBoom(reason, $"Connection closed: {reason}"));
         }
 
         private async Task<bool> Emit(string key, BinaryNode e)
@@ -698,6 +798,7 @@ namespace BaileysCSharp.Core
             Logger.Trace(new { trace = error?.StackTrace }, error != null ? "connection errored" : "connection closed");
             keepAliveToken?.Cancel();
             qrTimerToken?.Cancel();
+            FailPendingWaits(error);
 
             //try
             //{
@@ -727,6 +828,7 @@ namespace BaileysCSharp.Core
 
             keepAliveToken?.Cancel();
             qrTimerToken?.Cancel();
+            FailPendingWaits(CreateDisconnectBoom(connectionLost, reason));
 
             closed = true;
 

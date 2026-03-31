@@ -44,11 +44,13 @@ namespace BaileysCSharp.Core.Sockets.Client
 
         public void OnOpened()
         {
+            IsConnected = true;
             Opened?.Invoke(this);
         }
 
         public void OnDisconnected(DisconnectReason reason)
         {
+            IsConnected = false;
             Disconnected?.Invoke(this, reason);
         }
 

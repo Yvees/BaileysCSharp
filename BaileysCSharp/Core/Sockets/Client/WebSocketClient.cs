@@ -37,25 +37,31 @@ namespace BaileysCSharp.Core.Sockets.Client
             {
                 await WebSocket.ConnectAsync(new Uri("wss://web.whatsapp.com/ws/chat"), CancellationToken.None);
 
-                if (WebSocket.State == WebSocketState.Open)
+                if (WebSocket.State != WebSocketState.Open)
                 {
-                    IsConnected = true;
-                    OnOpened();
-                    while (WebSocket.State == WebSocketState.Open)
-                    {
-                        var sizeBuffer = await ReadBytes(3);
-                        // the binary protocol uses its own framing mechanism
-                        // on top of the WS frames
-                        // so we get this data and separate out the frames
-                        var messageSize = sizeBuffer[0] >> 16 | BitConverter.ToUInt16(sizeBuffer.Skip(1).Reverse().ToArray());
-
-                        //Read the frame based on the size
-                        var frame = await ReadBytes(messageSize);
-                        EmitReceivedData(frame);
-                    }
+                    OnDisconnected(Events.DisconnectReason.ConnectionClosed);
+                    return;
                 }
+
+                OnOpened();
+                while (WebSocket.State == WebSocketState.Open)
+                {
+                    var sizeBuffer = await ReadBytes(3);
+                    // the binary protocol uses its own framing mechanism
+                    // on top of the WS frames
+                    // so we get this data and separate out the frames
+                    var messageSize = (sizeBuffer[0] << 16)
+                        | (sizeBuffer[1] << 8)
+                        | sizeBuffer[2];
+
+                    //Read the frame based on the size
+                    var frame = await ReadBytes(messageSize);
+                    EmitReceivedData(frame);
+                }
+
+                OnDisconnected(Events.DisconnectReason.ConnectionClosed);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 OnDisconnected(Events.DisconnectReason.ConnectionLost);
             }
@@ -69,8 +75,24 @@ namespace BaileysCSharp.Core.Sockets.Client
                 var received = 0;
                 while (received < size)
                 {
-                    var byteBuffer = new byte[size - received];
+                    if (WebSocket.State != WebSocketState.Open)
+                    {
+                        throw new WebSocketException("WebSocket is not open.");
+                    }
+
+                    var byteBuffer = new byte[Math.Min(4096, size - received)];
                     var result = await WebSocket.ReceiveAsync(byteBuffer, CancellationToken.None);
+                    if (result.MessageType == WebSocketMessageType.Close)
+                    {
+                        throw new WebSocketException(
+                            $"WebSocket closed: {WebSocket.CloseStatus} {WebSocket.CloseStatusDescription}");
+                    }
+
+                    if (result.Count == 0)
+                    {
+                        throw new WebSocketException("WebSocket closed before the requested frame was fully received.");
+                    }
+
                     received += result.Count;
                     stream.Write(byteBuffer, 0, result.Count);
                 }
