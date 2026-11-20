@@ -329,11 +329,14 @@ namespace BaileysCSharp.Core.Sockets
                     options.AdditionalAttributes["device_fanout"] = "false";
                 }
 
+                // a retry goes to the device that asked, on its own server: a LID device asking
+                // about a message sent to the phone number must not become "<lid>:<n>@s.whatsapp.net"
                 var participantJidDecoded = JidDecode(options.Participant.Jid);
                 devices.Add(new JidWidhDevice()
                 {
                     Device = participantJidDecoded.Device,
                     User = participantJidDecoded.User,
+                    Server = participantJidDecoded.Server,
                 });
             }
 
@@ -443,44 +446,31 @@ namespace BaileysCSharp.Core.Sockets
                 var me = JidDecode(meId);
                 var meUser = me.User;
                 var meDevice = me.Device;
-                var selfLidUser = JidUtils.JidUser(Creds.Me.LID);
+                var meLidUser = JidUtils.JidUser(Creds.Me.LID);
+                var targetServer = isLid ? "lid" : "s.whatsapp.net";
+                // as in Baileys v7, a LID chat addresses our own devices by our LID as well
+                var ownServer = isLid && meLidUser != null ? "lid" : "s.whatsapp.net";
+                var ownUser = ownServer == "lid" ? meLidUser : meUser;
 
                 if (options.Participant == null)
                 {
-                    //options.Participant = new MessageParticipant()
-                    //{
-                    //    Count = 0,
-                    //    Jid = jid
-                    //};
-                    devices.Add(new JidWidhDevice() { User = user });
+                    devices.Add(new JidWidhDevice() { User = user, Server = targetServer });
                     // do not send message to self if the device is 0 (mobile)
                     if (meDevice != null && meDevice != 0)
                     {
-                        devices.Add(new JidWidhDevice() { User = meUser });
+                        devices.Add(new JidWidhDevice() { User = ownUser, Server = ownServer });
                     }
-                    var additionalDevices = await GetUSyncDevices([meId, jid], options.UseUserDevicesCache ?? false, true);
+                    var additionalDevices = await GetUSyncDevices([JidEncode(ownUser, ownServer), jid], options.UseUserDevicesCache ?? false, true);
                     devices.AddRange(additionalDevices);
                 }
-
-                // A retry goes to the device that asked, on its own server: a LID device asking
-                // about a message sent to the phone number must not become "<lid>:<n>@s.whatsapp.net".
-                var participantServer = options.Participant != null
-                    ? JidDecode(options.Participant.Jid)?.Server
-                    : null;
-                var deviceServer = participantServer == "lid" || participantServer == "s.whatsapp.net"
-                    ? participantServer
-                    : isLid ? "lid" : "s.whatsapp.net";
 
                 List<string> allJids = new List<string>();
                 List<string> meJids = new List<string>();
                 List<string> otherJids = new List<string>();
                 foreach (var item in devices)
                 {
-                    var iuser = item.User;
-                    var idevice = item.Device;
-                    var isMe = iuser == meUser;
-                    var addJidUser = (isMe && deviceServer == "lid") ? selfLidUser ?? iuser : iuser;
-                    var addJid = JidEncode(addJidUser, deviceServer, idevice);
+                    var isMe = item.User == meUser || item.User == meLidUser;
+                    var addJid = JidEncode(item.User, item.Server ?? targetServer, item.Device);
                     if (isMe)
                     {
                         meJids.Add(addJid);
@@ -547,10 +537,11 @@ namespace BaileysCSharp.Core.Sockets
                     stanza.attrs["to"] = destinationJid;
                     stanza.attrs["participant"] = options.Participant.Jid;
                 }
-                else if (AreJidsSameUser(options.Participant.Jid, meId))
+                else if (AreJidsSameUser(options.Participant.Jid, meId) || AreJidsSameUser(options.Participant.Jid, Creds.Me.LID))
                 {
+                    // one of our own devices: the chat goes in "recipient", as in Baileys v7
                     stanza.attrs["to"] = options.Participant.Jid;
-                    stanza.attrs["participant"] = destinationJid;
+                    stanza.attrs["recipient"] = destinationJid;
                 }
                 else
                 {

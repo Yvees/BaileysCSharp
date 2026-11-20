@@ -86,7 +86,7 @@ namespace BaileysCSharp.Core.Utils
                                         ((myUser != user && myLidUser != user) || myDevice != device) && // either different user or if me user, not this device
                                         (device == 0 || !string.IsNullOrEmpty(deviceNode.getattr("key-index")))) // ensure that "key-index" is specified for "non-zero" devices, produces a bad req otherwise
                                     {
-                                        extracted.Add(new JidWidhDevice() { User = user, Device = device });
+                                        extracted.Add(new JidWidhDevice() { User = user, Device = device, Server = jidUser.Server });
                                     }
                                 }
                             }
