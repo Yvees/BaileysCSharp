@@ -119,9 +119,15 @@ namespace BaileysCSharp.Core.NoSQL
                     memory[$"{attributes.Prefix}-{id}"] = value;
                     File.WriteAllText(file, JsonSerializer.Serialize(value, JsonHelper.Options));
                 }
-                else if (File.Exists(file))
+                else
                 {
+                    // Removing only the cached copy left the file behind, so the next Get read the
+                    // key back: deleted or reset sessions came back to life.
                     memory.Remove($"{attributes.Prefix}-{id}");
+                    if (File.Exists(file))
+                    {
+                        File.Delete(file);
+                    }
                 }
             }
         }
