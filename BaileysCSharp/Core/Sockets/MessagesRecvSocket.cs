@@ -623,28 +623,15 @@ namespace BaileysCSharp.Core.Sockets
 
         private bool WillSendMessageAgain(string id, string? participant)
         {
-            var key = $"{id}:{participant}";
-            if (MessageRetries.TryGetValue(id, out var value))
-            {
-                return value < MaxMsgRetryCount;
-            }
-            else
-            {
-                return true;
-            }
+            // counted per message and asking device, as in Baileys v7; the bare id is the
+            // counter of retry requests we send ourselves
+            return !MessageRetries.TryGetValue($"{id}:{participant}", out var value) || value < MaxMsgRetryCount;
         }
 
         private void UpdateSendMessageAgainCount(string id, string participant)
         {
             var key = $"{id}:{participant}";
-            if (MessageRetries.TryGetValue(id, out var value))
-            {
-                MessageRetries[key] = value + 1;
-            }
-            else
-            {
-                MessageRetries[key] = 1;
-            }
+            MessageRetries[key] = MessageRetries.TryGetValue(key, out var value) ? value + 1 : 1;
         }
 
         private async Task<bool> OnCall(BinaryNode node)
