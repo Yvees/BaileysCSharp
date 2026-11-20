@@ -663,36 +663,29 @@ namespace BaileysCSharp.Core.Sockets
         }
 
         /// <summary>
-        /// A message from a chat addressed by LID carries the sender's phone number: sender_pn
-        /// in a 1:1 chat, participant_pn next to a LID participant in a group. A newly linked
-        /// session has not synced its contacts yet (PnForLidChatAction comes later, if at all),
-        /// so without this the LID could not be resolved to a number. The mapping goes through
-        /// the contacts update event, so the store merges and keeps it like a synced one.
+        /// The message envelope names the other address of whoever it is about (Baileys v7
+        /// extractAddressingContext): a LID-addressed message carries the phone number
+        /// (sender_pn, participant_pn, recipient_pn), a phone-number-addressed one the LID
+        /// (sender_lid, participant_lid, recipient_lid). Learning the pair before decrypting
+        /// moves the sender's phone number sessions to the LID, so this message and every reply
+        /// use the one session the device holds. A newly linked session has not synced its
+        /// contacts yet, so this is also how a LID chat gets its phone number.
         /// </summary>
-        private void RememberPhoneForLid(BinaryNode node)
+        private void RememberLidMappings(BinaryNode node)
         {
             var participant = node.getattr("participant");
-            var (lid, phone) = !string.IsNullOrWhiteSpace(participant)
-                ? (participant, node.getattr("participant_pn"))
-                : (node.getattr("from"), node.getattr("sender_pn"));
-            if (string.IsNullOrWhiteSpace(lid) || string.IsNullOrWhiteSpace(phone))
+            if (!string.IsNullOrWhiteSpace(participant))
             {
-                return;
+                RememberLidMapping(participant, node.getattr("participant_pn") ?? node.getattr("participant_lid"));
+            }
+            else
+            {
+                RememberLidMapping(node.getattr("from"), node.getattr("sender_pn") ?? node.getattr("sender_lid"));
             }
 
-            var lidJid = JidUtils.JidNormalizedUser(lid);
-            var phoneJid = JidUtils.JidNormalizedUser(phone);
-            if (string.IsNullOrWhiteSpace(lidJid) || string.IsNullOrWhiteSpace(phoneJid) || !JidUtils.IsLidUser(lidJid))
-            {
-                return;
-            }
-
-            if (Store.GetContactByLid(lidJid)?.ID == phoneJid)
-            {
-                return;
-            }
-
-            EV.Emit(EmitType.Update, new ContactModel() { ID = phoneJid, LID = lidJid });
+            RememberLidMapping(node.getattr("recipient"),
+                node.getattr("recipient_pn") ?? node.getattr("recipient_lid")
+                ?? node.getattr("peer_recipient_pn") ?? node.getattr("peer_recipient_lid"));
         }
 
         private async Task HandleMessage(BinaryNode node)
@@ -704,7 +697,7 @@ namespace BaileysCSharp.Core.Sockets
                 return;
             }
 
-            RememberPhoneForLid(node);
+            RememberLidMappings(node);
 
             var msg = MessageDecoder.DecryptMessageNode(node, Creds.Me.ID, Creds.Me.LID, Repository, Logger);
 

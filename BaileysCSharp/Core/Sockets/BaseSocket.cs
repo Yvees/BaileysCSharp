@@ -442,7 +442,13 @@ namespace BaileysCSharp.Core
         /// </summary>
         private void RememberOwnLid(string? lid)
         {
-            if (string.IsNullOrWhiteSpace(lid) || Creds?.Me == null || Creds.Me.LID == lid)
+            if (string.IsNullOrWhiteSpace(lid) || Creds?.Me == null)
+            {
+                return;
+            }
+
+            RememberLidMapping(lid, Creds.Me.ID);
+            if (Creds.Me.LID == lid)
             {
                 return;
             }
@@ -450,6 +456,39 @@ namespace BaileysCSharp.Core
             Creds.Me.LID = lid;
             Logger.Info(new { me = Creds.Me.ID, lid }, "own LID");
             EV.Emit(EmitType.Update, Creds);
+        }
+
+        /// <summary>
+        /// Keeps a LID / phone number pair learned from WhatsApp (either order) and, the first
+        /// time, moves the phone number's sessions to the LID, as Baileys v7 does wherever it
+        /// learns a mapping. Contacts also get the pair, so the store resolves a LID chat to a
+        /// phone number like a synced contact.
+        /// </summary>
+        protected void RememberLidMapping(string? jid, string? alt)
+        {
+            if (string.IsNullOrWhiteSpace(jid) || string.IsNullOrWhiteSpace(alt))
+            {
+                return;
+            }
+
+            var first = JidUtils.JidNormalizedUser(jid);
+            var second = JidUtils.JidNormalizedUser(alt);
+            var (lid, pn) = JidUtils.IsLidUser(first) ? (first, second) : (second, first);
+            if (!JidUtils.IsLidUser(lid) || !JidUtils.IsJidUser(pn))
+            {
+                return;
+            }
+
+            if (Repository.LidMapping.Store(lid, pn))
+            {
+                var moved = Repository.MigrateSession(pn, lid);
+                Logger.Info(new { lid, pn, moved }, "learned LID mapping");
+            }
+
+            if (!JidUtils.AreJidsSameUser(pn, Creds?.Me?.ID) && Store?.GetContactByLid(lid)?.ID != pn)
+            {
+                EV.Emit(EmitType.Update, new ContactModel() { ID = pn, LID = lid });
+            }
         }
 
         private async Task<bool> StreamEnd(BinaryNode node)
