@@ -43,7 +43,17 @@ namespace BaileysCSharp.Core
             {
                 if (SocketConfig.FireInitQueries)
                 {
-                    await ExecuteInitQueries();
+                    // async void: an exception here would end the process. The init queries
+                    // fail with Boom "Connection closed" whenever the socket closes before they
+                    // are answered (a shutdown, a reconnect), which is not worth dying for.
+                    try
+                    {
+                        await ExecuteInitQueries();
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warn(new { error = ex.Message }, "init queries failed");
+                    }
                 }
 
                 SendPresenceUpdate(SocketConfig.MarkOnlineOnConnect ? WAPresence.Available : WAPresence.Unavailable);
