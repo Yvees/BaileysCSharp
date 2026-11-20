@@ -464,6 +464,15 @@ namespace BaileysCSharp.Core.Sockets
                     devices.AddRange(additionalDevices);
                 }
 
+                // A retry goes to the device that asked, on its own server: a LID device asking
+                // about a message sent to the phone number must not become "<lid>:<n>@s.whatsapp.net".
+                var participantServer = options.Participant != null
+                    ? JidDecode(options.Participant.Jid)?.Server
+                    : null;
+                var deviceServer = participantServer == "lid" || participantServer == "s.whatsapp.net"
+                    ? participantServer
+                    : isLid ? "lid" : "s.whatsapp.net";
+
                 List<string> allJids = new List<string>();
                 List<string> meJids = new List<string>();
                 List<string> otherJids = new List<string>();
@@ -472,8 +481,8 @@ namespace BaileysCSharp.Core.Sockets
                     var iuser = item.User;
                     var idevice = item.Device;
                     var isMe = iuser == meUser;
-                    var addJidUser = (isMe && isLid) ? selfLidUser ?? iuser : iuser;
-                    var addJid = JidEncode(addJidUser, isLid ? "lid" : "s.whatsapp.net", idevice);
+                    var addJidUser = (isMe && deviceServer == "lid") ? selfLidUser ?? iuser : iuser;
+                    var addJid = JidEncode(addJidUser, deviceServer, idevice);
                     if (isMe)
                     {
                         meJids.Add(addJid);

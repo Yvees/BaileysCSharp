@@ -522,7 +522,7 @@ namespace BaileysCSharp.Core.Sockets
                         {
                             try
                             {
-                                Logger.Debug(new { node.attrs, key }, "recv retry request");
+                                Logger.Info(new { node.attrs, key }, "recv retry request");
                                 SendMessageAgain(key, ids, retryNode);
                             }
                             catch (Exception ex)
@@ -573,14 +573,17 @@ namespace BaileysCSharp.Core.Sockets
             // if it's the primary jid sending the request
             // just re-send the message to everyone
             // prevents the first message decryption failure
-            var sendToAll = JidUtils.JidDecode(participant)?.Device > 0;
+            // (as in Baileys: only the primary device, 0, gets everyone; any other device that
+            // asks gets the message alone, encrypted with the session just forced for it)
+            var participantDevice = JidUtils.JidDecode(participant)?.Device;
+            var sendToAll = participantDevice is null or 0;
             await AssertSessions([participant], true);
 
             if (JidUtils.IsJidGroup(remoteJid))
             {
                 Keys.Set<SenderKeyMemory>(remoteJid, null);
             }
-            Logger.Debug(new { participant, sendToAll }, "forced new session for retry recp");
+            Logger.Info(new { remoteJid, participant, sendToAll, ids }, "forced new session for retry recp");
 
 
             for (int i = 0; i < msgs.Length; i++)
@@ -609,10 +612,11 @@ namespace BaileysCSharp.Core.Sockets
                     }
 
                     await RelayMessage(remoteJid, msg, msgRelayOpts);
+                    Logger.Info(new { remoteJid, participant, sendToAll, id = ids[i] }, "sent message again for retry");
                 }
                 else
                 {
-                    Logger.Debug(new { jid = key.RemoteJid, id = ids[i] }, "recv retry request, but message not available");
+                    Logger.Info(new { jid = key.RemoteJid, id = ids[i] }, "recv retry request, but message not available");
                 }
             }
         }
