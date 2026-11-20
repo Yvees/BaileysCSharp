@@ -149,27 +149,13 @@ namespace BaileysCSharp.Core.Sockets
         protected async Task<bool> AssertSessions(List<string> jids, bool force)
         {
             var didFetchNewSession = false;
-            List<string> jidsRequiringFetch = new List<string>();
-            if (force)
-            {
-                jidsRequiringFetch = jids.ToList();
-            }
-            else
-            {
-                var addrs = jids.Select(x => new ProtocolAddress(x)).ToList();
-                var sessions = Keys.Get<SessionRecord>(addrs.Select(x => x.ToString()).ToList());
-                foreach (var jid in jids)
-                {
-                    if (!sessions.ContainsKey(new ProtocolAddress(jid).ToString()))
-                    {
-                        jidsRequiringFetch.Add(jid.ToString());
-                    }
-                    else if (sessions[new ProtocolAddress(jid).ToString()] == null)
-                    {
-                        jidsRequiringFetch.Add(jid.ToString());
-                    }
-                }
-            }
+            // as in Baileys v7: a phone number with a known LID is fetched (and its session
+            // kept) as the LID, the same session messages from that device are decrypted with
+            var jidsRequiringFetch = jids
+                .Where(jid => force || !Repository.HasSession(jid))
+                .Select(Repository.SignalJid)
+                .Distinct()
+                .ToList();
 
             if (jidsRequiringFetch.Count > 0)
             {
