@@ -18,8 +18,10 @@ namespace BaileysCSharp.Core.Signal
         {
             Auth = auth;
             Storage = new SignalStorage(Auth);
+            LidMapping = new LidMappingStore(Auth.Keys);
         }
         public AuthenticationState Auth { get; }
+        public LidMappingStore LidMapping { get; }
 
         public byte[] DecryptGroupMessage(string group, string authorJid, byte[] content)
         {
