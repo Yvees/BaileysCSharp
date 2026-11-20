@@ -17,6 +17,10 @@ namespace BaileysCSharp.Core.NoSQL
 
         private static object locker = new object();
 
+        // Path.Combine, not "\\": on Linux a backslash is part of the file name, so the keys would
+        // land beside their folder (e.g. "pre-key\12.json") and the ones inside it go unread.
+        private static string FileName(string id) => $"{id.Replace("/", "__").Replace("::", "__")}.json";
+
         public override T Get<T>(string id)
         {
             lock (locker)
@@ -36,12 +40,12 @@ namespace BaileysCSharp.Core.NoSQL
                 if (!Directory.Exists(path))
                     Directory.CreateDirectory(path);
 
-                var file = $"{path}\\{attributes.Prefix}-{id.Replace("/", "__").Replace("::", "__")}.json";
+                var file = System.IO.Path.Combine(path, $"{attributes.Prefix}-{FileName(id)}");
 
                 if (File.Exists(file))
                 {
                     var mv = file;
-                    file = $"{path}\\{id.Replace("/", "__").Replace("::", "__")}.json";
+                    file = System.IO.Path.Combine(path, FileName(id));
                     if (File.Exists(file))
                     {
                         File.Delete(file);
@@ -49,7 +53,7 @@ namespace BaileysCSharp.Core.NoSQL
                     File.Move(mv, file);
                 }
 
-                file = $"{path}\\{id.Replace("/", "__").Replace("::", "__")}.json";
+                file = System.IO.Path.Combine(path, FileName(id));
                 if (File.Exists(file))
                 {
                     var data = File.ReadAllText(file) ?? "";
@@ -108,7 +112,7 @@ namespace BaileysCSharp.Core.NoSQL
                 var path = System.IO.Path.Combine(Path, attributes.Prefix);
                 if (!Directory.Exists(path))
                     Directory.CreateDirectory(path);
-                var file = $"{path}\\{id.Replace("/", "__").Replace("::", "__")}.json";
+                var file = System.IO.Path.Combine(path, FileName(id));
 
                 if (value != null)
                 {
