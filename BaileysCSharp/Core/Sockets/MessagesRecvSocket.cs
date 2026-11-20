@@ -658,6 +658,39 @@ namespace BaileysCSharp.Core.Sockets
             return await ProcessNodeWithBuffer(node, "processing message", HandleMessage);
         }
 
+        /// <summary>
+        /// A message from a chat addressed by LID carries the sender's phone number: sender_pn
+        /// in a 1:1 chat, participant_pn next to a LID participant in a group. A newly linked
+        /// session has not synced its contacts yet (PnForLidChatAction comes later, if at all),
+        /// so without this the LID could not be resolved to a number. The mapping goes through
+        /// the contacts update event, so the store merges and keeps it like a synced one.
+        /// </summary>
+        private void RememberPhoneForLid(BinaryNode node)
+        {
+            var participant = node.getattr("participant");
+            var (lid, phone) = !string.IsNullOrWhiteSpace(participant)
+                ? (participant, node.getattr("participant_pn"))
+                : (node.getattr("from"), node.getattr("sender_pn"));
+            if (string.IsNullOrWhiteSpace(lid) || string.IsNullOrWhiteSpace(phone))
+            {
+                return;
+            }
+
+            var lidJid = JidUtils.JidNormalizedUser(lid);
+            var phoneJid = JidUtils.JidNormalizedUser(phone);
+            if (string.IsNullOrWhiteSpace(lidJid) || string.IsNullOrWhiteSpace(phoneJid) || !JidUtils.IsLidUser(lidJid))
+            {
+                return;
+            }
+
+            if (Store.GetContactByLid(lidJid)?.ID == phoneJid)
+            {
+                return;
+            }
+
+            EV.Emit(EmitType.Update, new ContactModel() { ID = phoneJid, LID = lidJid });
+        }
+
         private async Task HandleMessage(BinaryNode node)
         {
             if (ShouldIgnoreJid(node.getattr("from")) && node.getattr("from") != "@s.whatsapp.net")
@@ -666,6 +699,8 @@ namespace BaileysCSharp.Core.Sockets
                 SendMessageAck(node);
                 return;
             }
+
+            RememberPhoneForLid(node);
 
             var msg = MessageDecoder.DecryptMessageNode(node, Creds.Me.ID, Creds.Me.LID, Repository, Logger);
 
