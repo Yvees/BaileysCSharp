@@ -112,6 +112,11 @@ namespace BaileysCSharp.Core.Sockets
                                         {
                                             {"version", "2" }
                                         }
+                                    },
+                                    // Baileys v7 USyncLIDProtocol: each user comes back with <lid val="..."/>
+                                    new BinaryNode()
+                                    {
+                                        tag = "lid",
                                     }
                                 },
                             },
@@ -126,7 +131,13 @@ namespace BaileysCSharp.Core.Sockets
             };
 
             var result = await Query(iq);
-            var extracted = ExtractDeviceJids(result, Creds.Me.ID, ignoreZeroDevices);
+            var usyncUsers = GetBinaryNodeChildren(GetBinaryNodeChild(GetBinaryNodeChild(result, "usync"), "list"), "user");
+            foreach (var usyncUser in usyncUsers)
+            {
+                RememberLidMapping(usyncUser.getattr("jid"), GetBinaryNodeChild(usyncUser, "lid")?.getattr("val"));
+            }
+
+            var extracted = ExtractDeviceJids(result, Creds.Me.ID, Creds.Me.LID, ignoreZeroDevices);
             Dictionary<string, List<JidWidhDevice>> deviceMap = new Dictionary<string, List<JidWidhDevice>>();
 
             foreach (var item in extracted)
@@ -140,6 +151,7 @@ namespace BaileysCSharp.Core.Sockets
             foreach (var item in deviceMap)
             {
                 userDevicesCache.Set(item.Key, item.Value);
+                Repository.RememberDevices(item.Key, item.Value.Select(x => x.Device ?? 0));
             }
 
 

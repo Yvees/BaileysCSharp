@@ -50,11 +50,13 @@ namespace BaileysCSharp.Core.Utils
 
         }
 
-        public static JidWidhDevice[] ExtractDeviceJids(BinaryNode result, string myJid, bool excludeZeroDevices)
+        public static JidWidhDevice[] ExtractDeviceJids(BinaryNode result, string myJid, string? myLid, bool excludeZeroDevices)
         {
             var me = JidDecode(myJid);
             var myUser = me.User;
             var myDevice = me.Device;
+            // our devices come back under the LID user when we were queried by LID
+            var myLidUser = JidDecode(myLid)?.User;
 
             var extracted = new List<JidWidhDevice>();
 
@@ -81,7 +83,7 @@ namespace BaileysCSharp.Core.Utils
 
                                     if (tag == "device" && // ensure the "device" tag
                                         (!excludeZeroDevices || device != 0) && // if zero devices are not-excluded, or device is non zero
-                                        (myUser != user || myDevice != device) && // either different user or if me user, not this device
+                                        ((myUser != user && myLidUser != user) || myDevice != device) && // either different user or if me user, not this device
                                         (device == 0 || !string.IsNullOrEmpty(deviceNode.getattr("key-index")))) // ensure that "key-index" is specified for "non-zero" devices, produces a bad req otherwise
                                     {
                                         extracted.Add(new JidWidhDevice() { User = user, Device = device });
