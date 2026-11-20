@@ -430,9 +430,28 @@ namespace BaileysCSharp.Core
             await SendPassiveIq("active");
 
             Logger.Info("opened connection to WA");
+            RememberOwnLid(node.getattr("lid"));
             EV.Emit(EmitType.Update, new ConnectionState() { Connection = WAConnectionState.Open });
             return true;
         }
+
+        /// <summary>
+        /// The success node names the LID WhatsApp addresses this account by. Without it a
+        /// receipt or message from our own LID is not recognised as ours, and messages to a
+        /// LID chat cannot address our other devices by LID.
+        /// </summary>
+        private void RememberOwnLid(string? lid)
+        {
+            if (string.IsNullOrWhiteSpace(lid) || Creds?.Me == null || Creds.Me.LID == lid)
+            {
+                return;
+            }
+
+            Creds.Me.LID = lid;
+            Logger.Info(new { me = Creds.Me.ID, lid }, "own LID");
+            EV.Emit(EmitType.Update, Creds);
+        }
+
         private async Task<bool> StreamEnd(BinaryNode node)
         {
             await Task.Yield();
