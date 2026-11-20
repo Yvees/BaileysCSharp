@@ -732,12 +732,14 @@ namespace BaileysCSharp.Core
                         }
                     };
                 }
+                // as in Baileys v7: in a LID chat we speak as our LID
+                var from = JidUtils.IsLidUser(toJid) && !string.IsNullOrWhiteSpace(me?.LID) ? me.LID : me?.ID;
                 SendNode(new BinaryNode()
                 {
                     tag = "chatstate",
                     attrs =
                     {
-                        {"from", me?.ID ?? "" },
+                        {"from", from ?? "" },
                         {"to", toJid}
                     },
                     content = new BinaryNode[] { childNode }
