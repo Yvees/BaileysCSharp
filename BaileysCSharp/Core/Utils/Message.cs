@@ -372,8 +372,9 @@ namespace BaileysCSharp.Core.Utils
 
             var data = memroyStream.ToArray();
             byte[] encrypted = [];
-            //var mediaKey = KeyHelper.RandomBytes(32);
-            var mediaKey = Convert.FromBase64String("SrRqGYETTwGcZal0sSwL5NXYc5uGWQK3N+DQ1kqq2aA=");
+            // a fresh key per upload, as in Baileys: the key travels inside the end-to-end
+            // encrypted message, and a fixed one would let anyone with the media URL decrypt it
+            var mediaKey = RandomNumberGenerator.GetBytes(32);
             var mediaKeys = GetMediaKeys(mediaKey, mediaType);
 
             var hmac = new HMACSHA256(mediaKeys.MacKey);
