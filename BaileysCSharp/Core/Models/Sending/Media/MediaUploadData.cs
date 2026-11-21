@@ -5,7 +5,9 @@
         public Stream Media { get; set; }
         public string Caption { get; set; }
         public bool Ptt { get; set; }
-        public long Seconds { get; set; }
+        // same type as AudioMessageContent.Seconds: CopyMatchingValues skips a property whose
+        // type differs, which left this 0 and sent every audio through ffprobe
+        public uint Seconds { get; set; }
         public bool GifPlayback { get; set; }
         public string FileName { get; set; }
         public byte[] JpegThumbnail { get; set; }

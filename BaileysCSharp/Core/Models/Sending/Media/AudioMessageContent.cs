@@ -23,7 +23,10 @@ namespace BaileysCSharp.Core.Models.Sending.Media
         public uint Seconds { get; set; }
         public ulong FileLength { get; set; }
         public string Mimetype { get; set; }
-        public bool Ptt { get; private set; }
+        /// <summary>A voice note (push to talk): Ogg Opus, shown with a waveform and played inline.</summary>
+        public bool Ptt { get; set; }
+        /// <summary>A voice note's waveform: up to 64 levels of 0..100.</summary>
+        public byte[]? Waveform { get; set; }
 
         public Stream Audio
         {
@@ -34,7 +37,6 @@ namespace BaileysCSharp.Core.Models.Sending.Media
 
         private void OnLoadImage(Stream value)
         {
-            Ptt = false;
             if (value is MemoryStream memoryStream)
             {
                 audio = memoryStream;
@@ -77,6 +79,10 @@ namespace BaileysCSharp.Core.Models.Sending.Media
                 Seconds = Seconds,
                 Ptt = Ptt
             };
+            if (Waveform is { Length: > 0 })
+            {
+                image.Waveform = Google.Protobuf.ByteString.CopyFrom(Waveform);
+            }
             return image;
         }
     }
